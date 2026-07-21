@@ -105,7 +105,7 @@
 
       <div id="job-workspace" class="space-y-6 hidden">
         
-        <div class="bg-blue-900 text-white p-6 rounded-xl shadow-md flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div class="bg-blue-900 text-white p-6 rounded-xl shadow-md flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
           <div>
             <div class="flex items-center gap-2">
               <span id="role-badge" class="text-xs font-bold px-2.5 py-1 rounded bg-blue-800 text-blue-200 border border-blue-700"></span>
@@ -114,16 +114,21 @@
             <h2 id="current-job-title" class="text-2xl sm:text-3xl font-black mt-1">Job Name</h2>
           </div>
 
-          <div class="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
-            <div class="text-center bg-white/10 px-4 py-2 rounded-lg border border-white/20">
-              <span id="stat-total-assignments" class="block text-xl font-black">0</span>
-              <span class="text-xs text-blue-200 uppercase font-bold">Assignments</span>
+          <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto justify-between lg:justify-end">
+            <div class="flex-1 lg:flex-initial text-center bg-white/10 px-3 sm:px-4 py-2 rounded-lg border border-white/20 min-w-[90px]">
+              <span id="stat-total-assignments" class="block text-lg sm:text-xl font-black">0</span>
+              <span class="text-[10px] sm:text-xs text-blue-200 uppercase font-bold">Assignments</span>
             </div>
-            <div class="text-center bg-white/10 px-4 py-2 rounded-lg border border-white/20">
-              <span id="stat-finished-assignments" class="block text-xl font-black text-green-300">0</span>
-              <span class="text-xs text-blue-200 uppercase font-bold">Finished</span>
+            <div class="flex-1 lg:flex-initial text-center bg-white/10 px-3 sm:px-4 py-2 rounded-lg border border-white/20 min-w-[90px]">
+              <span id="stat-finished-assignments" class="block text-lg sm:text-xl font-black text-blue-300">0</span>
+              <span class="text-[10px] sm:text-xs text-blue-200 uppercase font-bold">Finished</span>
             </div>
-            <button onclick="toggleNewAssignmentModal(true)" class="bg-green-600 hover:bg-green-700 text-white font-bold px-5 py-3 rounded-lg text-sm transition shadow-md flex items-center gap-2">
+            <div class="flex-1 lg:flex-initial text-center bg-white/10 px-3 sm:px-4 py-2 rounded-lg border border-white/20 min-w-[90px]">
+              <span id="stat-approved-assignments" class="block text-lg sm:text-xl font-black text-green-300">0</span>
+              <span class="text-[10px] sm:text-xs text-blue-200 uppercase font-bold">Approved</span>
+            </div>
+
+            <button onclick="toggleNewAssignmentModal(true)" class="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-3 rounded-lg text-xs sm:text-sm transition shadow-md flex items-center gap-1.5 shrink-0 ml-auto lg:ml-0">
               <span>➕</span> Create Assignment
             </button>
           </div>
@@ -133,13 +138,13 @@
           <div class="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
             <label for="assignment-select" class="text-sm font-bold text-slate-700 whitespace-nowrap">📌 Select Assignment to View / Edit:</label>
             <select id="assignment-select" onchange="handleAssignmentSelect(this.value)" class="w-full sm:w-80 p-2.5 border border-slate-300 rounded-lg bg-white font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
-              </select>
+            </select>
           </div>
           <span class="text-xs text-slate-500 italic">Select a specific assignment to display its details</span>
         </div>
 
         <div id="assignments-container" class="space-y-6">
-          </div>
+        </div>
 
       </div>
 
@@ -260,7 +265,8 @@
             createdFile: "",
             createdBy: "OFFSITE (Office)",
             createdAt: new Date().toLocaleDateString(),
-            status: "Pending", // "Pending" or "Finished"
+            isFinished: true,
+            isApproved: false,
             actualDuration: "1.5 days",
             onsiteUpdates: [
               {
@@ -282,7 +288,7 @@
       accounts: [],
       jobs: [],
       selectedJobId: null,
-      selectedAssignmentId: "none" // Forces user to select one before viewing
+      selectedAssignmentId: "none"
     };
 
     // 3. INITIALIZATION
@@ -449,7 +455,7 @@
     // 6. JOB MANAGEMENT
     function handleJobSelect(jobId) {
       state.selectedJobId = jobId;
-      state.selectedAssignmentId = "none"; // Reset when switching jobs
+      state.selectedAssignmentId = "none";
       renderApp();
     }
 
@@ -547,14 +553,15 @@
           createdFile: imageData || "",
           createdBy: state.currentUser.name,
           createdAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-          status: "Pending",
+          isFinished: false,
+          isApproved: false,
           actualDuration: "",
           onsiteUpdates: []
         };
 
         if (!activeJob.assignments) activeJob.assignments = [];
         activeJob.assignments.push(newAssignment);
-        state.selectedAssignmentId = newAssignment.id; // Auto-select the newly created assignment
+        state.selectedAssignmentId = newAssignment.id;
         
         saveJobsToStorage();
         toggleNewAssignmentModal(false);
@@ -606,6 +613,7 @@
       });
     }
 
+    // SEPARATE WORKFLOW TOGGLES
     function toggleFinishAssignment(assignmentId) {
       const activeJob = state.jobs.find(j => j.id === state.selectedJobId);
       if (!activeJob) return;
@@ -613,7 +621,25 @@
       const assign = activeJob.assignments.find(a => a.id === assignmentId);
       if (!assign) return;
 
-      assign.status = assign.status === "Finished" ? "Pending" : "Finished";
+      // Toggle finished state independently
+      const currentFinished = !!(assign.isFinished || assign.status === 'Finished' || assign.status === 'Approved');
+      assign.isFinished = !currentFinished;
+      
+      saveJobsToStorage();
+      renderApp();
+    }
+
+    function toggleApproveAssignment(assignmentId) {
+      const activeJob = state.jobs.find(j => j.id === state.selectedJobId);
+      if (!activeJob) return;
+
+      const assign = activeJob.assignments.find(a => a.id === assignmentId);
+      if (!assign) return;
+
+      // Toggle approved state independently
+      const currentApproved = !!(assign.isApproved || assign.status === 'Approved');
+      assign.isApproved = !currentApproved;
+
       saveJobsToStorage();
       renderApp();
     }
@@ -625,7 +651,7 @@
       if (!activeJob) return;
 
       activeJob.assignments = activeJob.assignments.filter(a => a.id !== assignmentId);
-      state.selectedAssignmentId = "none"; // Reset selection after deleting
+      state.selectedAssignmentId = "none";
       saveJobsToStorage();
       renderApp();
     }
@@ -707,34 +733,43 @@
       }
 
       const assignments = activeJob.assignments || [];
-      const finishedCount = assignments.filter(a => a.status === 'Finished').length;
 
-      document.getElementById('stat-total-assignments').textContent = assignments.length;
+      // Calculate distinct counters
+      const totalCount = assignments.length;
+      const finishedCount = assignments.filter(a => a.isFinished || a.status === 'Finished' || a.status === 'Approved').length;
+      const approvedCount = assignments.filter(a => a.isApproved || a.status === 'Approved').length;
+
+      document.getElementById('stat-total-assignments').textContent = totalCount;
       document.getElementById('stat-finished-assignments').textContent = finishedCount;
+      document.getElementById('stat-approved-assignments').textContent = approvedCount;
 
-      // Populate Assignment Dropdown Selector
       const assignSelect = document.getElementById('assignment-select');
       if (assignments.length === 0) {
         assignSelect.innerHTML = `<option value="none">-- No Assignments Created --</option>`;
         assignSelect.disabled = true;
       } else {
         assignSelect.disabled = false;
-        // The default "none" option forces a choice (disabled and hidden when selecting)
         let optionsHtml = `<option value="none" disabled ${state.selectedAssignmentId === 'none' ? 'selected' : ''}>-- Select an Assignment to View --</option>`;
-        optionsHtml += assignments.map(a => `
-          <option value="${a.id}" ${state.selectedAssignmentId === a.id ? 'selected' : ''}>
-            ${a.status === 'Finished' ? '✅' : '⏳'} ${a.title}
-          </option>
-        `).join('');
+        optionsHtml += assignments.map(a => {
+          const isFin = a.isFinished || a.status === 'Finished' || a.status === 'Approved';
+          const isApp = a.isApproved || a.status === 'Approved';
+
+          let icon = '⏳';
+          if (isApp) icon = '✅';
+          else if (isFin) icon = '👷';
+
+          return `
+            <option value="${a.id}" ${state.selectedAssignmentId === a.id ? 'selected' : ''}>
+              ${icon} ${a.title}
+            </option>
+          `;
+        }).join('');
         assignSelect.innerHTML = optionsHtml;
       }
 
-      // Filter Assignments based on dropdown selection
       let displayedAssignments = [];
       if (state.selectedAssignmentId && state.selectedAssignmentId !== 'none') {
         displayedAssignments = assignments.filter(a => a.id === state.selectedAssignmentId);
-        
-        // Safety fallback if selected assignment was somehow deleted but state didn't update
         if (displayedAssignments.length === 0) {
           state.selectedAssignmentId = 'none';
         }
@@ -746,7 +781,6 @@
     function renderAssignmentsList(assignments, hasAnyAssignments) {
       const container = document.getElementById('assignments-container');
 
-      // State 1: There are absolutely no assignments in this job yet
       if (!hasAnyAssignments) {
         container.innerHTML = `
           <div class="bg-white rounded-xl border border-dashed border-slate-300 p-12 text-center">
@@ -757,7 +791,6 @@
         return;
       }
 
-      // State 2: Assignments exist, but NONE has been selected from the dropdown yet
       if (assignments.length === 0) {
         container.innerHTML = `
           <div class="bg-blue-50/50 rounded-xl border border-dashed border-blue-200 p-12 text-center">
@@ -768,20 +801,39 @@
         return;
       }
 
-      // State 3: Display the specifically selected assignment
       container.innerHTML = assignments.map(assign => {
-        const isFinished = assign.status === 'Finished';
+        const isFinished = !!(assign.isFinished || assign.status === 'Finished' || assign.status === 'Approved');
+        const isApproved = !!(assign.isApproved || assign.status === 'Approved');
+        const isOnsite = state.currentUser && state.currentUser.role === 'onsite';
 
-        const statusTag = isFinished
-          ? `<span class="bg-green-100 border border-green-300 text-green-800 text-xs font-black px-3 py-1 rounded-full flex items-center gap-1">
-               ✅ Finished
-             </span>`
-          : `<span class="bg-amber-100 border border-amber-300 text-amber-800 text-xs font-black px-3 py-1 rounded-full flex items-center gap-1">
-               ⏳ Pending / In Progress
-             </span>`;
+        // Separate Badges
+        const finishedBadge = isFinished
+          ? `<span class="bg-blue-100 border border-blue-300 text-blue-800 text-xs font-black px-2.5 py-1 rounded-full flex items-center gap-1">👷 Finished</span>`
+          : `<span class="bg-amber-100 border border-amber-300 text-amber-800 text-xs font-black px-2.5 py-1 rounded-full flex items-center gap-1">⏳ In Progress</span>`;
+
+        const approvedBadge = isApproved
+          ? `<span class="bg-green-100 border border-green-300 text-green-800 text-xs font-black px-2.5 py-1 rounded-full flex items-center gap-1">✅ Approved</span>`
+          : `<span class="bg-slate-100 border border-slate-300 text-slate-600 text-xs font-medium px-2.5 py-1 rounded-full flex items-center gap-1">⌛ Pending Approval</span>`;
+
+        // Separate Action Controls based on user role
+        let actionControlHtml = '';
+        if (isOnsite) {
+          actionControlHtml = `
+            <label class="flex items-center gap-2 cursor-pointer font-bold text-xs sm:text-sm bg-white px-3 py-1.5 rounded-lg border ${isFinished ? 'border-blue-500 text-blue-700 bg-blue-50' : 'border-slate-300 text-slate-700'} hover:bg-slate-100 transition select-none">
+              <input type="checkbox" onchange="toggleFinishAssignment('${assign.id}')" ${isFinished ? 'checked' : ''} class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+              <span>${isFinished ? '👷 Marked as Finished' : 'Mark as Finished'}</span>
+            </label>
+          `;
+        } else {
+          actionControlHtml = `
+            <button onclick="toggleApproveAssignment('${assign.id}')" class="font-bold text-xs sm:text-sm px-4 py-2 rounded-lg transition shadow-sm flex items-center gap-1.5 ${isApproved ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-slate-700 hover:bg-slate-800 text-white'}">
+              <span>${isApproved ? '✅ Approved (Click to Revoke)' : '✔️ Approve Assignment'}</span>
+            </button>
+          `;
+        }
 
         return `
-          <div class="bg-white rounded-xl border-2 ${isFinished ? 'border-green-300 shadow-green-50' : 'border-slate-200'} shadow-sm overflow-hidden transition-all duration-200">
+          <div class="bg-white rounded-xl border-2 ${isApproved ? 'border-green-400 shadow-green-50' : isFinished ? 'border-blue-300 shadow-blue-50' : 'border-slate-200'} shadow-sm overflow-hidden transition-all duration-200">
             
             <div class="bg-blue-900 text-white px-5 py-3 flex flex-wrap justify-between items-center gap-2">
               <div class="flex items-center gap-2">
@@ -790,9 +842,10 @@
                 </span>
                 <span class="text-xs text-blue-200">By: <strong>${assign.createdBy}</strong></span>
               </div>
-              <div class="flex items-center gap-3">
-                ${statusTag}
-                <button onclick="deleteAssignment('${assign.id}')" class="bg-red-500/20 hover:bg-red-500 text-white text-xs font-bold px-2 py-1 rounded transition" title="Delete Assignment">
+              <div class="flex items-center gap-2">
+                ${finishedBadge}
+                ${approvedBadge}
+                <button onclick="deleteAssignment('${assign.id}')" class="bg-red-500/20 hover:bg-red-500 text-white text-xs font-bold px-2 py-1 rounded transition ml-1" title="Delete Assignment">
                   🗑️
                 </button>
               </div>
@@ -834,13 +887,10 @@
               
               <div class="flex flex-wrap justify-between items-center gap-4 border-b border-slate-200 pb-3">
                 <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                  <span>👷</span> Field Progress & Updates
+                  <span>💬</span> Field Progress & Discussion Updates
                 </h5>
 
-                <label class="flex items-center gap-2 cursor-pointer font-bold text-xs sm:text-sm bg-white px-3 py-1.5 rounded-lg border ${isFinished ? 'border-green-500 text-green-700 bg-green-50' : 'border-slate-300 text-slate-700'} hover:bg-slate-100 transition select-none">
-                  <input type="checkbox" onchange="toggleFinishAssignment('${assign.id}')" ${isFinished ? 'checked' : ''} class="w-4 h-4 text-green-600 rounded focus:ring-green-500">
-                  <span>${isFinished ? '✅ Finished Assignment' : 'Finish Assignment'}</span>
-                </label>
+                ${actionControlHtml}
               </div>
 
               ${assign.onsiteUpdates && assign.onsiteUpdates.length > 0 ? `
@@ -860,7 +910,7 @@
                     </div>
                   `).join('')}
                 </div>
-              ` : '<p class="text-xs text-slate-400 italic">No onsite field notes or photos added yet.</p>'}
+              ` : '<p class="text-xs text-slate-400 italic">No field notes or photos added yet.</p>'}
 
               <form onsubmit="handleAddOnsiteUpdate(event, '${assign.id}')" class="mt-3 pt-3 border-t border-slate-200 space-y-3">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -869,18 +919,18 @@
                     <input type="text" placeholder="e.g., 4.5 hours, 2 days" value="${assign.actualDuration || ''}" class="input-actual-duration w-full p-2 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 bg-white">
                   </div>
                   <div>
-                    <label class="block text-xs font-bold text-slate-600 mb-1">Attach Onsite Photo / Progress File</label>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Attach Photo / Reference File</label>
                     <input type="file" accept="image/*" class="input-onsite-file w-full p-1 text-xs border border-slate-300 rounded bg-white">
                   </div>
                 </div>
 
                 <div>
-                  <textarea rows="2" placeholder="Write field comments, progress details, or challenges..." class="textarea-onsite-comment w-full p-2 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 bg-white"></textarea>
+                  <textarea rows="2" placeholder="Write comments, progress details, or notes..." class="textarea-onsite-comment w-full p-2 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 bg-white"></textarea>
                 </div>
 
                 <div class="flex justify-end">
                   <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2 px-4 rounded transition flex items-center gap-1 shadow-sm">
-                    💬 Submit Progress / Update
+                    💬 Post Note / Update
                   </button>
                 </div>
               </form>
